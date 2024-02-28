@@ -49,6 +49,9 @@ pub mod vs {
             #version 460
 
             layout(location = 0) in vec3 position;
+            layout(location = 1) in vec3 color;
+
+            layout(location = 1) out vec3 s_color;
 
             void main() {
                 // vec2 outUV = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
@@ -58,6 +61,7 @@ pub mod vs {
                 //
 
                 gl_Position = vec4(position, 1.0);
+                s_color = color;
             }
         ",
     }
@@ -68,11 +72,11 @@ pub mod fs {
         ty: "fragment",
         src: "
             #version 460
-
             layout(location = 0) out vec4 f_color;
+            layout(location = 1) in vec3 s_color;
 
             void main() {
-                f_color = vec4(vec3(0.0), 1.0);
+                f_color = vec4(s_color, 1.0);
             }
         ",
     }
@@ -88,11 +92,15 @@ pub static RECREATE_SWAPCHAIN: Lazy<Mutex<bool>> = Lazy::new(|| {Mutex::new(fals
 pub struct FVertex3d {
     #[format(R32G32B32_SFLOAT)]
     position: [f32; 3],
+    #[format(R32G32B32_SFLOAT)]
+    color: [f32; 3],
 }
 
+use crate::utils::random;
 pub fn vert(x: f32, y: f32, z: f32) -> FVertex3d {
     FVertex3d {
         position: [x, y, z],
+        color: [random(0.0, 1.0), random(0.0, 1.0), random(0.0, 1.0)],
     }
 }
 
@@ -173,9 +181,6 @@ impl VkView {
         let command_buffers = vk.get_command_buffers(
             &pipeline, 
             &framebuffers, 
-            &vert_buffers[0], 
-            &index_buffers[0],
-            layout.clone(), 
             None,
         );
 
@@ -197,7 +202,9 @@ impl VkView {
     }
 
     pub fn if_recreate_swapchain(&mut self, window: Arc<winit::window::Window>, vk: &mut Vk) {
-        if *WINDOW_RESIZED.lock().unwrap() || *RECREATE_SWAPCHAIN.lock().unwrap() {
+        let size = window.inner_size();
+        let is_size_zero = size.width > 0 && size.height > 0;
+        if (*WINDOW_RESIZED.lock().unwrap() || *RECREATE_SWAPCHAIN.lock().unwrap()) && is_size_zero {
             *RECREATE_SWAPCHAIN.lock().unwrap() = false;
             let new_dim = window.inner_size();
 
@@ -230,9 +237,6 @@ impl VkView {
         self.command_buffers = vk.get_command_buffers(
             &self.pipeline.clone(),
             &self.framebuffers,
-            &self.vert_buffers[0],
-            &self.index_buffers[0],
-            self.layout.clone(),
             Some(&self)
         );
 
@@ -408,9 +412,6 @@ impl Vk {
         &self,
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &[Arc<Framebuffer>],
-        vertex_buffer: &Subbuffer<[FVertex3d]>,
-        index_buffer: &Subbuffer<[u32]>,
-        layout: Arc<PipelineLayout>,
         vk_view: Option<&VkView>,
     ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
         framebuffers

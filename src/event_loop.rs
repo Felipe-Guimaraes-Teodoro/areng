@@ -60,6 +60,7 @@ pub fn run() {
 
             Event::MainEventsCleared => {
                 // let then = std::time::Instant::now();
+                let size = window.inner_size();
 
                 view.if_recreate_swapchain(window.clone(), &mut vk);
                 view.update(&mut vk);

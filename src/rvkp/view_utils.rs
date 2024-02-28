@@ -1,5 +1,7 @@
 use crate::rvkp::presenter::VkView;
 
+use vulkano::buffer::Subbuffer;
+
 impl VkView {
     pub fn push_b_objs(
         &mut self,
