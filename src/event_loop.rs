@@ -9,6 +9,8 @@ use crate::rvkp::presenter::vert;
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
 
+use crate::utils::random;
+
 pub fn run() {  
     let event_loop = EventLoop::new();
 
@@ -59,15 +61,12 @@ pub fn run() {
             },
 
             Event::MainEventsCleared => {
-                // let then = std::time::Instant::now();
-                let size = window.inner_size();
-
                 view.if_recreate_swapchain(window.clone(), &mut vk);
                 view.update(&mut vk);
 
                 view.set_b_objs(0, 
                     vk.vertex_buffer(vec![
-                        vert(0.3, 0.3, 0.0),
+                        vert(random(0.0, 1.0), 0.3, 0.0),
                         vert(-0.3, 0.0, 0.0),
                         vert(0.3, -0.6, 0.0),
                         vert(0.9, 0.1, 0.0),
@@ -80,7 +79,6 @@ pub fn run() {
                 presenter.present(&mut vk, &view);
 
                 frame_id += 1.0;
-                // println!("@MAIN: MainEventsCleared cleared within {:?}", then.elapsed());
             },
 
             _ => () 

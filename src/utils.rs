@@ -8,3 +8,31 @@ pub fn random
 
     return rng.gen_range(l..u);
 }
+
+pub fn nth(n: u32) -> u32 {
+    let x = if n <= 10 { 10.0 } else { n as f64 };
+    
+    let limit: usize = (x * (x * (x).ln()).ln()).ceil() as usize;
+    let mut sieve = vec![true; limit];
+    let mut count = 0;
+
+    sieve[0] = false;
+    sieve[1] = false;
+
+    for prime in 2..limit {
+
+        if !sieve[prime] {
+            continue;
+        }
+        if count == n {
+            return prime as u32;
+        }
+        count += 1;
+
+        let mut sieve = sieve.clone();
+        for multiple in ((2 * prime)..limit).step_by(prime) {
+            sieve[multiple] = false;
+        }
+    }
+    return <u32>::max_value();
+}
