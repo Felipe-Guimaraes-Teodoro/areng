@@ -40,47 +40,8 @@ use vulkano::pipeline::GraphicsPipeline;
 use vulkano::sync::future::JoinFuture;
 use vulkano::render_pass::Framebuffer;
 
+use crate::rvkp::shader::*;
 use crate::rvkp::init::Vk;
-
-pub mod vs {
-    vulkano_shaders::shader!{
-        ty: "vertex",
-        src: r"
-            #version 460
-
-            layout(location = 0) in vec3 position;
-            layout(location = 1) in vec3 color;
-
-            layout(location = 1) out vec3 s_color;
-
-            void main() {
-                // vec2 outUV = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-                // gl_Position = vec4(outUV * 2.0 - 1.0, 0.0, 1.0);
-
-                // pos = vec3(outUV * 2.0 - 1.0, 0.0);
-                //
-
-                gl_Position = vec4(position, 1.0);
-                s_color = color;
-            }
-        ",
-    }
-}
-
-pub mod fs {
-    vulkano_shaders::shader!{
-        ty: "fragment",
-        src: "
-            #version 460
-            layout(location = 0) out vec4 f_color;
-            layout(location = 1) in vec3 s_color;
-
-            void main() {
-                f_color = vec4(s_color, 1.0);
-            }
-        ",
-    }
-}
 
 use once_cell::sync::Lazy;
 
