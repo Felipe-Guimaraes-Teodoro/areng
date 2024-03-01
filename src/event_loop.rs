@@ -33,9 +33,9 @@ pub fn run() {
      */
     view.push_b_objs(
         vk.vertex_buffer(vec![
-            vert(0.3, 0.3, 0.0),
-            vert(-0.3, 0.0, 0.0),
-            vert(0.3, -0.6, 0.0),
+            vert(0.1, 0.1, 0.0),
+            vert(-0.1, 0.0, 0.0),
+            vert(0.1, -0.1, 0.0),
         ]),
         vk.index_buffer(vec![
             0, 1, 2
@@ -61,24 +61,28 @@ pub fn run() {
             },
 
             Event::MainEventsCleared => {
+                let now = std::time::Instant::now();
+
                 view.if_recreate_swapchain(window.clone(), &mut vk);
                 view.update(&mut vk);
 
-                view.set_b_objs(0, 
-                    vk.vertex_buffer(vec![
-                        vert(random(0.0, 1.0), 0.3, 0.0),
-                        vert(-0.3, 0.0, 0.0),
-                        vert(0.3, -0.6, 0.0),
-                        vert(0.9, 0.1, 0.0),
-                    ]),
-                    vk.index_buffer(vec![
-                        0, 1, 2, 2, 1, 3
-                    ]),
-                );
+                // view.set_b_objs(0, 
+                //     vk.vertex_buffer(vec![
+                //         vert(random(0.0, 1.0), 0.3, 0.0),
+                //         vert(-0.1, 0.0, 0.0),
+                //         vert(0.1, -0.1, 0.0),
+                //         vert(0.1, 0.1, 0.0),
+                //     ]),
+                //     vk.index_buffer(vec![
+                //         0, 1, 2, 2, 1, 3
+                //     ]),
+                // );
 
                 presenter.present(&mut vk, &view);
 
                 frame_id += 1.0;
+
+                dbg!(now.elapsed());
             },
 
             _ => () 

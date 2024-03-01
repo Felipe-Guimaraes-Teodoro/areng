@@ -3,6 +3,9 @@
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 color;
 
+// per instance data
+layout(location = 2) in vec3 ofs;
+
 layout(location = 1) out vec3 s_color;
 
 void main() {

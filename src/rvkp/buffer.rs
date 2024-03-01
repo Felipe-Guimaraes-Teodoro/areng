@@ -4,6 +4,7 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::image::{Image, ImageCreateInfo, ImageUsage};
 use vulkano::format::Format;
 
+
 impl crate::rvkp::init::Vk {
     pub fn buf_iter
         <T: Sync + Send + Sized + ExactSizeIterator>
@@ -60,6 +61,27 @@ impl crate::rvkp::init::Vk {
                 ..Default::default()
             },
             vec,
+        )
+        .expect("failed to create buffer")
+    }
+
+    pub fn instance_buffer(
+        &self, 
+        i_data: Vec<crate::rvkp::presenter::InstanceData>
+    ) -> vulkano::buffer::Subbuffer<[crate::rvkp::presenter::InstanceData]> 
+    {
+        Buffer::from_iter(
+            self.mem_allocators.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            i_data,
         )
         .expect("failed to create buffer")
     }

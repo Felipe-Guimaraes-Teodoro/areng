@@ -57,6 +57,15 @@ pub struct FVertex3d {
     color: [f32; 3],
 }
 
+#[repr(C)]
+#[derive(BufferContents, Vertex)]
+pub struct InstanceData {
+    #[format(R32G32B32_SFLOAT)]
+    ofs: [f32; 3],
+    #[format(R32G32B32_SFLOAT)]
+    fun_factor: [f32; 3],
+}
+
 use crate::utils::random;
 pub fn vert(x: f32, y: f32, z: f32) -> FVertex3d {
     FVertex3d {
@@ -78,6 +87,7 @@ pub struct VkView {
     pub shader_mods: Vec<Arc<vulkano::shader::ShaderModule>>,
     pub vert_buffers: Vec<Subbuffer<[FVertex3d]>>,
     pub index_buffers: Vec<Subbuffer<[u32]>>,
+    pub instance_buffers: Vec<Subbuffer<[InstanceData]>>,
     pub surface: Arc<Surface>,
     pub framebuffers : Vec<Arc<Framebuffer>>,
     pub render_pass: Arc<vulkano::render_pass::RenderPass>,
@@ -107,22 +117,26 @@ impl VkView {
             vk.vertex_buffer(
                 vec![
                     vert(0.0, 0.0, 0.0), 
-                    vert(1.0, 0.0, 0.0),
-                    vert(1.0, 1.0, 0.0),
-                ],
-            ),
-            vk.vertex_buffer(
-                vec![
-                    vert(0.0, -1.0, 0.0), 
-                    vert(-1.0, 0.0, 0.0),
-                    vert(0.0, 1.0, 0.0),
+                    vert(0.1, 0.0, 0.0),
+                    vert(0.1, 0.1, 0.0),
                 ],
             ),
         ];
 
         let index_buffers = vec![
             vk.index_buffer(vec![0, 1, 2]),  
-            vk.index_buffer(vec![0, 1, 2]),  
+        ];
+
+        let instance_buffers = vec![
+            vk.instance_buffer(
+                (0..100000).map(|i| {
+                    let r = || {random(0.0, 1.0)};
+                    InstanceData {
+                        ofs: [random(-1.0, 1.0), random(-1.0, 1.0), 0.0],
+                        fun_factor: [r(), r(), r()],
+                    }
+                }).collect(),
+            ),
         ];
 
         let vs = vs::load(vk.device.clone()).unwrap();
@@ -154,6 +168,7 @@ impl VkView {
             viewport,
             vert_buffers,
             index_buffers,
+            instance_buffers,
             shader_mods: vec![vs, fs],
             framebuffers,
             pipeline,
@@ -326,7 +341,11 @@ impl Vk {
         let vs = vs.entry_point("main").unwrap();
         let fs = fs.entry_point("main").unwrap();
 
-        let vertex_input_state = FVertex3d::per_vertex()
+        // let vertex_input_state = FVertex3d::per_vertex()
+        //     .definition(&vs.info().input_interface)
+        //     .unwrap();
+
+        let vertex_input_state = [FVertex3d::per_vertex(), InstanceData::per_instance()]
             .definition(&vs.info().input_interface)
             .unwrap();
 
@@ -404,13 +423,21 @@ impl Vk {
                 if let Some(vk_view) = vk_view {
                     for idx in 0..vk_view.index_buffers.len() {
                         builder
-                            .bind_vertex_buffers(0, vk_view.vert_buffers[idx].clone())
+                            .bind_vertex_buffers(0, (vk_view.vert_buffers[idx].clone(), vk_view.instance_buffers[0].clone()))
                             .unwrap()
                             .bind_index_buffer(vk_view.index_buffers[idx].clone())
                             .unwrap()
-                            .draw_indexed(vk_view.index_buffers[idx].len() as u32, 1, 0, 0, 0)
+                            .draw_indexed(vk_view.index_buffers[idx].len() as u32, vk_view.instance_buffers[0].len() as u32, 0, 0, 0)
                             .unwrap();
                     }
+                    //
+                    // for idx in 0..vk_view.instance_buffers.len() {
+                    //     builder
+                    //         .bind_vertex_buffers(0, vk_view.instance_buffers[idx].clone())
+                    //         .unwrap()
+                    //         .draw_indexed(vk_view.index_buffers[idx].len() as u32, vk_view.instance_buffers[idx].len() as u32, 0, 0, 0)
+                    //         .unwrap();
+                    // }
                  };
 
                 builder
@@ -420,5 +447,6 @@ impl Vk {
                 builder.build().unwrap()
             })
             .collect()
+
     }
 }
