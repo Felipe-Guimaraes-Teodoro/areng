@@ -82,12 +82,11 @@ pub struct Pipeline {
     pub framebuffer: Option<Arc<Framebuffer>>,
 }
 
+use crate::rvkp::mesh::Mesh;
 pub struct VkView {
     pub viewport: vulkano::pipeline::graphics::viewport::Viewport,
     pub shader_mods: Vec<Arc<vulkano::shader::ShaderModule>>,
-    pub vert_buffers: Vec<Subbuffer<[FVertex3d]>>,
-    pub index_buffers: Vec<Subbuffer<[u32]>>,
-    pub instance_buffers: Vec<Subbuffer<[InstanceData]>>,
+    pub meshes: Vec<Mesh>,
     pub surface: Arc<Surface>,
     pub framebuffers : Vec<Arc<Framebuffer>>,
     pub render_pass: Arc<vulkano::render_pass::RenderPass>,
@@ -113,30 +112,8 @@ impl VkView {
             depth_range: 0.0..=1.0,
         };
 
-        let vert_buffers = vec![
-            vk.vertex_buffer(
-                vec![
-                    vert(0.0, 0.0, 0.0), 
-                    vert(0.1, 0.0, 0.0),
-                    vert(0.1, 0.1, 0.0),
-                ],
-            ),
-        ];
-
-        let index_buffers = vec![
-            vk.index_buffer(vec![0, 1, 2]),  
-        ];
-
-        let instance_buffers = vec![
-            vk.instance_buffer(
-                (0..100000).map(|i| {
-                    let r = || {random(0.0, 1.0)};
-                    InstanceData {
-                        ofs: [random(-1.0, 1.0), random(-1.0, 1.0), 0.0],
-                        fun_factor: [r(), r(), r()],
-                    }
-                }).collect(),
-            ),
+        let meshes = vec![
+            Mesh::quad(&vk),
         ];
 
         let vs = vs::load(vk.device.clone()).unwrap();
@@ -166,9 +143,7 @@ impl VkView {
             surface,
             render_pass,
             viewport,
-            vert_buffers,
-            index_buffers,
-            instance_buffers,
+            meshes,
             shader_mods: vec![vs, fs],
             framebuffers,
             pipeline,
@@ -407,7 +382,7 @@ impl Vk {
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
-                            clear_values: vec![Some([0.0, 0.0, 1.0, 1.0].into())],
+                            clear_values: vec![Some([0.1, 0.11, 0.12, 1.0].into())],
                             ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
                         },
                         SubpassBeginInfo {
@@ -421,23 +396,19 @@ impl Vk {
                     // .push_constants(layout.clone(), 0, push_constant)
 
                 if let Some(vk_view) = vk_view {
-                    for idx in 0..vk_view.index_buffers.len() {
+                    for mesh in &vk_view.meshes {
+                        //mesh.draw(&mut builder);
+                        let vert_buf = mesh.vert_buf.clone().unwrap();
+                        let ind_buf = mesh.ind_buf.clone().unwrap();
+                        
                         builder
-                            .bind_vertex_buffers(0, (vk_view.vert_buffers[idx].clone(), vk_view.instance_buffers[0].clone()))
+                            .bind_vertex_buffers(0, vert_buf.clone())
                             .unwrap()
-                            .bind_index_buffer(vk_view.index_buffers[idx].clone())
+                            .bind_index_buffer(ind_buf.clone())
                             .unwrap()
-                            .draw_indexed(vk_view.index_buffers[idx].len() as u32, vk_view.instance_buffers[0].len() as u32, 0, 0, 0)
+                            .draw_indexed(ind_buf.len() as u32, 0 as u32, 0, 0, 0)
                             .unwrap();
                     }
-                    //
-                    // for idx in 0..vk_view.instance_buffers.len() {
-                    //     builder
-                    //         .bind_vertex_buffers(0, vk_view.instance_buffers[idx].clone())
-                    //         .unwrap()
-                    //         .draw_indexed(vk_view.index_buffers[idx].len() as u32, vk_view.instance_buffers[idx].len() as u32, 0, 0, 0)
-                    //         .unwrap();
-                    // }
                  };
 
                 builder
