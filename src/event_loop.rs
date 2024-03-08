@@ -22,6 +22,9 @@ pub fn run() {
     let mut presenter =  VkPresenter::new(&mut vk);
     let app = App::new();
 
+    window.set_cursor_visible(false);
+    window.set_cursor_position(winit::dpi::PhysicalPosition::new(200.0, 200.)).unwrap();
+
     /*
      *  struct BObj {
      *      color,
@@ -43,6 +46,7 @@ pub fn run() {
     // );
 
     let mut frame_id = 0.0;
+    let mut mouse_pos: (f64, f64) = (0.0, 0.0);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -60,9 +64,22 @@ pub fn run() {
                 *WINDOW_RESIZED.lock().unwrap() = true;
             },
 
+            Event::WindowEvent {
+                event,
+                ..
+            } => {
+                vk.camera.input(&window, &event);
+            },
+            
+            Event::DeviceEvent {event: winit::event::DeviceEvent::MouseMotion { delta },..} => {
+                mouse_pos = (mouse_pos.0 + delta.0, mouse_pos.1 + delta.1);
+                vk.camera.mouse_callback(-mouse_pos.0 as f32, mouse_pos.1 as f32);
+            }
+
             Event::MainEventsCleared => {
                 // let now = std::time::Instant::now();
 
+                window.set_cursor_position(winit::dpi::PhysicalPosition::new(200.0, 200.)).unwrap();
                 view.if_recreate_swapchain(window.clone(), &mut vk);
                 view.update(&mut vk);
 

@@ -36,6 +36,8 @@ pub struct VkMemAllocators {
     pub descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 }
 
+use crate::rvkp::camera::Camera;
+
 pub struct Vk {
     pub library: Arc<VulkanLibrary>,
     pub physical_device: Arc<PhysicalDevice>,
@@ -49,6 +51,8 @@ pub struct Vk {
     pub images: Option<Vec<Arc<vulkano::image::Image>>>,
 
     pub resolution: [f32; 2],
+
+    pub camera: Camera,
 }
 
 impl Vk {
@@ -116,6 +120,8 @@ impl Vk {
             descriptor_set_allocator,
         });
 
+        let camera = Camera::new();
+
         Self {
             library,
             device,
@@ -127,6 +133,7 @@ impl Vk {
 
             swapchain: None, // will be initialized later on
             images: None,
+            camera,
         }
     }
 
@@ -163,7 +170,7 @@ impl Vk {
         self.images = Some(images.clone());
     }
 
-    pub fn sync(&self, command: Arc<impl PrimaryCommandBufferAbstract + 'static>) {
+    pub fn sync(&mut self, command: Arc<impl PrimaryCommandBufferAbstract + 'static>) {
         let future = sync::now(self.device.clone())
             .then_execute(self.queue.clone(), command.clone())
             .unwrap()

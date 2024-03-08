@@ -4,6 +4,7 @@ use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer
 
 use crate::rvkp::init::Vk;
 use crate::rvkp::presenter::vert;
+use crate::rvkp::presenter::InstanceData;
 
 pub struct Mesh {
     pub vert_buf: Option<Subbuffer<[crate::rvkp::presenter::FVertex3d]>>,    
@@ -33,11 +34,17 @@ impl Mesh {
         );
 
         let ind_buf = vk.index_buffer(vec![0, 1, 2, 2, 1, 3]);
+        let inst_buf = vk.instance_buffer(vec![
+            InstanceData {
+                ofs: [0.0, 0.0, 0.0],
+                fun_factor: [0.0, 0.0, 0.0],
+            }
+        ]);
 
         Self {
             vert_buf: Some(vert_buf),
             ind_buf: Some(ind_buf),
-            inst_buf: None,
+            inst_buf: Some(inst_buf),
         }
     }
 

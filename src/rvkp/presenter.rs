@@ -61,9 +61,9 @@ pub struct FVertex3d {
 #[derive(BufferContents, Vertex)]
 pub struct InstanceData {
     #[format(R32G32B32_SFLOAT)]
-    ofs: [f32; 3],
+    pub ofs: [f32; 3],
     #[format(R32G32B32_SFLOAT)]
-    fun_factor: [f32; 3],
+    pub fun_factor: [f32; 3],
 }
 
 use crate::utils::random;
@@ -95,6 +95,7 @@ pub struct VkView {
     pub layout: Arc<vulkano::pipeline::layout::PipelineLayout>,
 
     pub command_buffers: Vec<Arc<PrimaryAutoCommandBuffer<StandardCommandBufferAllocator>>>,
+
 }
 
 pub struct VkPresenter {
@@ -132,6 +133,7 @@ impl VkView {
 
         let command_buffers = vk.get_command_buffers(
             &pipeline, 
+            &layout,
             &framebuffers, 
             None,
         );
@@ -187,6 +189,7 @@ impl VkView {
     pub fn update(&mut self, vk: &mut Vk) {
         self.command_buffers = vk.get_command_buffers(
             &self.pipeline.clone(),
+            &self.layout,
             &self.framebuffers,
             Some(&self)
         );
@@ -364,8 +367,9 @@ impl Vk {
     }
 
     pub fn get_command_buffers(
-        &self,
+        &mut self,
         pipeline: &Arc<GraphicsPipeline>,
+        layout: &Arc<PipelineLayout>,
         framebuffers: &[Arc<Framebuffer>],
         vk_view: Option<&VkView>,
     ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
@@ -378,6 +382,8 @@ impl Vk {
                     CommandBufferUsage::MultipleSubmit,
                 )
                 .unwrap();
+
+                self.camera.update();
 
                 builder
                     .begin_render_pass(
@@ -394,20 +400,13 @@ impl Vk {
                     .bind_pipeline_graphics(pipeline.clone())
                     .unwrap();
                     // .push_constants(layout.clone(), 0, push_constant)
+                
+
+                let mut builder = self.camera.send_push_constants(builder, layout);
 
                 if let Some(vk_view) = vk_view {
                     for mesh in &vk_view.meshes {
-                        //mesh.draw(&mut builder);
-                        let vert_buf = mesh.vert_buf.clone().unwrap();
-                        let ind_buf = mesh.ind_buf.clone().unwrap();
-                        
-                        builder
-                            .bind_vertex_buffers(0, vert_buf.clone())
-                            .unwrap()
-                            .bind_index_buffer(ind_buf.clone())
-                            .unwrap()
-                            .draw_indexed(ind_buf.len() as u32, 0 as u32, 0, 0, 0)
-                            .unwrap();
+                        mesh.draw(&mut builder);
                     }
                  };
 

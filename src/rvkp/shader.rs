@@ -16,6 +16,11 @@ layout(location = 3) in vec3 color;
 
 layout(location = 1) out vec3 s_color;
 
+layout(push_constant) uniform PushConstantCameraData {
+    mat4 proj;
+    mat4 view;
+};
+
 void main() {
   // vec2 outUV = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
   // gl_Position = vec4(outUV * 2.0 - 1.0, 0.0, 1.0);
@@ -23,7 +28,7 @@ void main() {
   // pos = vec3(outUV * 2.0 - 1.0, 0.0);
   //
 
-  gl_Position = vec4(
+  gl_Position = proj * view * vec4(
     position.x + ofs.x * sin((position.x + fun_factor.x) * 0.5), 
     position.y + ofs.y * sin((position.y + fun_factor.y) * 0.5), 
     position.z + ofs.z, 
