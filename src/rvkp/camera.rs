@@ -16,7 +16,7 @@ const UP: Vec3A = vec3a(0.0, 1.0, 0.0);
 const SPEED: f32 = 0.5;
 const SENSITIVITY: f32 = 0.1;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Camera {
     pub proj: Mat4,
     pub view: Mat4,
@@ -38,7 +38,7 @@ pub struct Camera {
     last_x: f32,
     last_y: f32,
 
-    keymap: [bool; 4],
+    keymap: Vec<bool>,
 }
 
 impl Camera {
@@ -89,7 +89,7 @@ impl Camera {
             last_x: 400.0,
             last_y: 400.0,
 
-            keymap: [false; 4],
+            keymap: Vec::from_iter((0..6).map(|_| {false})),
         }
     }
 

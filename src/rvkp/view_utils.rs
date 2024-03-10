@@ -1,14 +1,14 @@
 use crate::rvkp::{presenter::VkView, mesh::Mesh};
 
 use vulkano::buffer::Subbuffer;
+use crate::rvkp::mesh::Mesh;
 
 impl VkView {
     pub fn push_mesh(
         &mut self,
-        vert: vulkano::buffer::Subbuffer<[crate::rvkp::presenter::FVertex3d]>,
-        indx: vulkano::buffer::Subbuffer<[u32]>,
+        mesh: Mesh,
     ) {
-        todo!();
+        self.meshes.push(mesh);
     }
 
     pub fn set_mesh(

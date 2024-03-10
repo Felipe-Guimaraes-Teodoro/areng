@@ -10,8 +10,11 @@ use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
 
 use crate::utils::random;
+use crate::mesh_gen::{VOXGEN_CH, VoxelMeshGenJob};
 
-pub fn run() {  
+use tokio::spawn;
+
+pub async fn run() {  
     let event_loop = EventLoop::new();
 
     let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
@@ -25,27 +28,7 @@ pub fn run() {
     window.set_cursor_visible(false);
     window.set_cursor_position(winit::dpi::PhysicalPosition::new(200.0, 200.)).unwrap();
 
-    /*
-     *  struct BObj {
-     *      color,
-     *      transform,
-     *      buffers,
-     *      push_consts,
-     *      ... idk 
-     *  }
-     */
-    // view.push_b_objs(
-    //     vk.vertex_buffer(vec![
-    //         vert(0.1, 0.1, 0.0),
-    //         vert(-0.1, 0.0, 0.0),
-    //         vert(0.1, -0.1, 0.0),
-    //     ]),
-    //     vk.index_buffer(vec![
-    //         0, 1, 2
-    //     ]),
-    // );
-
-    let mut frame_id = 0.0;
+    let mut frame_id = 0;
     let mut mouse_pos: (f64, f64) = (0.0, 0.0);
 
     event_loop.run(move |event, _, control_flow| {
@@ -85,7 +68,14 @@ pub fn run() {
 
                 presenter.present(&mut vk, &view);
 
-                frame_id += 1.0;
+                frame_id += 1;
+
+                if frame_id % 500 == 0 {
+                    spawn(async {
+                        VOXGEN_CH.send(VoxelMeshGenJob::chunk()).await;
+                    });
+                }
+
 
                 // dbg!(now.elapsed());
             },

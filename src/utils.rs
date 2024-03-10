@@ -36,3 +36,16 @@ pub fn nth(n: u32) -> u32 {
     }
     return <u32>::max_value();
 }
+
+pub fn vec3_to_idx(x: usize, y: usize, z: usize, size: usize,) -> usize {
+    x + size * (y + size * z)
+}
+
+use glam::{Vec3A, vec3a};
+pub fn idx_to_vec3(index: f32, size: f32) -> Vec3A {
+    let z = index / (size * size);
+    let y = (index / size) % size;
+    let x = index % size;
+
+    vec3a(x, y, z)
+}
