@@ -20,12 +20,17 @@ pub async fn run() {
     let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
     window.set_title("@");
 
-    let mut vk = Vk::new(&event_loop);
-    let mut view = VkView::new(&mut vk, window.clone());
-    let mut presenter =  VkPresenter::new(&mut vk);
-    let app = App::new();
+    let vk = Arc::new(Mutex::new(Vk::new(&event_loop)));
+    let mut view = Arc::new(Mutex::new(VkView::new(vk.clone(), window.clone())));
+    let mut presenter =  VkPresenter::new(vk.clone());
+    let _app = App::new();
 
     window.set_cursor_visible(false);
+
+    // one of them gotta work
+    let _ = window.set_cursor_grab(CursorGrabMode::Locked);
+    let _ = window.set_cursor_grab(CursorGrabMode::Confined);
+
     window.set_cursor_position(winit::dpi::PhysicalPosition::new(200.0, 200.)).unwrap();
 
     let mut frame_id = 0;
@@ -51,31 +56,36 @@ pub async fn run() {
                 event,
                 ..
             } => {
-                vk.camera.input(&window, &event);
+                vk.clone().lock().unwrap().camera.input(&window, &event);
             },
             
             Event::DeviceEvent {event: winit::event::DeviceEvent::MouseMotion { delta },..} => {
                 mouse_pos = (mouse_pos.0 + delta.0, mouse_pos.1 + delta.1);
-                vk.camera.mouse_callback(-mouse_pos.0 as f32, mouse_pos.1 as f32);
+                vk.clone().lock().unwrap()
+                    .camera.mouse_callback(-mouse_pos.0 as f32, mouse_pos.1 as f32);
             }
 
             Event::MainEventsCleared => {
                 // let now = std::time::Instant::now();
 
-                window.set_cursor_position(winit::dpi::PhysicalPosition::new(200.0, 200.)).unwrap();
-                view.if_recreate_swapchain(window.clone(), &mut vk);
-                view.update(&mut vk);
+                // window.set_cursor_position(winit::dpi::PhysicalPosition::new(200.0, 200.)).unwrap();
+                let mut vk_guard = vk.lock().unwrap();
+                let mut view_guard = view.lock().unwrap();
 
-                presenter.present(&mut vk, &view);
+                view_guard.if_recreate_swapchain(window.clone(), &mut vk_guard);
+                view_guard.update(&mut vk_guard);
+
+                presenter.present(&mut vk_guard, &view_guard);
 
                 frame_id += 1;
 
+                let view_clone = view.clone();
+                let vk_clone = vk.clone();
                 if frame_id % 500 == 0 {
                     spawn(async {
-                        VOXGEN_CH.send(VoxelMeshGenJob::chunk()).await;
+                        VOXGEN_CH.send(VoxelMeshGenJob::chunk(), view_clone, vk_clone).await;
                     });
                 }
-
 
                 // dbg!(now.elapsed());
             },

@@ -105,7 +105,8 @@ pub struct VkPresenter {
 }
 
 impl VkView {
-    pub fn new(vk: &mut Vk, window: Arc<winit::window::Window>) -> Self {
+    pub fn new(vk: Arc<Mutex<Vk>>, window: Arc<winit::window::Window>) -> Self {
+        let mut vk = vk.lock().unwrap();
         let surface = Surface::from_window(vk.instance.clone(), window.clone()).unwrap();
         let viewport = vulkano::pipeline::graphics::viewport::Viewport {
             offset: [0.0, 0.0],
@@ -198,7 +199,8 @@ impl VkView {
 }
 
 impl VkPresenter {
-    pub fn new(vk: &mut Vk) -> Self {
+    pub fn new(vk: Arc<Mutex<Vk>>) -> Self {
+        let vk = vk.lock().unwrap();
         let images = vk.images.clone().unwrap();
         let frames_in_flight = images.len();
         let fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; frames_in_flight];

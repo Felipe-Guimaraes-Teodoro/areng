@@ -1,11 +1,13 @@
 use tokio::sync::{mpsc, Mutex};
 use tokio::task;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 
 use once_cell::sync::Lazy;
 
 use crate::rvkp::mesh::Mesh;
+use crate::rvkp::init::Vk;
+use crate::rvkp::presenter::VkView;
 
 const CHUNK_SIZE: usize = 32;
 
@@ -15,48 +17,46 @@ pub async fn init() {
             let receiver = &VOXGEN_CH.job_receiver;
             let mut rcv_guard = receiver.lock().await;
 
-            if let Some(job) = rcv_guard.recv().await {
-                VoxelMeshGen::execute(job);
+            if let Some(rcv_result) = rcv_guard.recv().await {
+                let mesh = VoxelMeshGen::execute(rcv_result.0);
+                let view = rcv_result.1;
+                let vk = rcv_result.2;
+
+                let mut view_guard = view.lock().unwrap();
+                let vk_guard = vk.lock().unwrap();
+
+                view_guard.meshes.clear();
+                view_guard.push_mesh(
+                    Mesh::quad(&vk_guard)
+                );
             }
         }
     });
 }
 
 pub struct VoxelGenChannel {
-    job_sender: mpsc::Sender<VoxelMeshGenJob>,
-    job_receiver: Arc<Mutex<mpsc::Receiver<VoxelMeshGenJob>>>,
-
-
-    mesh_sender: mpsc::Sender<Mesh>,
-    mesh_receiver: Arc<Mutex<mpsc::Receiver<Mesh>>>,
+    job_sender: mpsc::Sender<(VoxelMeshGenJob, Arc<StdMutex<VkView>>, Arc<StdMutex<Vk>>)>,
+    job_receiver: Arc<Mutex<mpsc::Receiver<(VoxelMeshGenJob, Arc<StdMutex<VkView>>, Arc<StdMutex<Vk>>)>>>,
 }
 
 impl VoxelGenChannel {
-    pub async fn send(&self, job: VoxelMeshGenJob) {
-        self.job_sender.send(job).await.unwrap();
-    }
-
-    pub async fn get(&self, job: VoxelMeshGenJob) -> Option<Mesh> {
-        let receiver = &VOXGEN_CH.mesh_receiver;
-        let mut rcv_guard = receiver.lock().await;
-
-        return rcv_guard.recv().await 
+    pub async fn send(
+        &self, 
+        job: VoxelMeshGenJob, 
+        view: Arc<StdMutex<VkView>>, 
+        vk: Arc<StdMutex<Vk>>,
+    ) {
+        self.job_sender.send((job, view, vk)).await.unwrap();
     }
 }
 
 pub static VOXGEN_CH: Lazy<Arc<VoxelGenChannel>> = Lazy::new(|| {
-    let (job_sender, job_receiver) = mpsc::channel::<VoxelMeshGenJob>(100);
+    let (job_sender, job_receiver) = mpsc::channel::<(VoxelMeshGenJob, Arc<StdMutex<VkView>>, Arc<StdMutex<Vk>>)>(100);
     let job_receiver = Arc::new(Mutex::new(job_receiver));
-
-
-    let (mesh_sender, mesh_receiver) = mpsc::channel::<Mesh>(100);
-    let mesh_receiver = Arc::new(Mutex::new(mesh_receiver));
 
     let channel = VoxelGenChannel {
         job_sender,
         job_receiver,
-        mesh_sender,
-        mesh_receiver,
     };
 
     Arc::new(channel)

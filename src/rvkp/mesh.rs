@@ -6,11 +6,12 @@ use crate::rvkp::init::Vk;
 use crate::rvkp::presenter::vert;
 use crate::rvkp::presenter::InstanceData;
 
+
+#[derive(Clone)]
 pub struct Mesh {
     pub vert_buf: Option<Subbuffer<[crate::rvkp::presenter::FVertex3d]>>,    
     pub ind_buf: Option<Subbuffer<[u32]>>,    
     pub inst_buf: Option<Subbuffer<[crate::rvkp::presenter::InstanceData]>>,
-
     // transform_mat: [[f32; 4];4],
 }
 

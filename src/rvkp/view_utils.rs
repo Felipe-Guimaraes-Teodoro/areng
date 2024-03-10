@@ -1,7 +1,6 @@
 use crate::rvkp::{presenter::VkView, mesh::Mesh};
 
 use vulkano::buffer::Subbuffer;
-use crate::rvkp::mesh::Mesh;
 
 impl VkView {
     pub fn push_mesh(
