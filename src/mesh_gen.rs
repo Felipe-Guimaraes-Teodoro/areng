@@ -91,7 +91,7 @@ impl VoxelMeshGenJob {
         }
 
         for _i in 0..CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
-            voxels.push(false); 
+            voxels.push(random(0, 10) % 2 == 0); 
         }
         CHUNKS.lock().unwrap()[chunk_idx] = true;
 
@@ -123,9 +123,39 @@ impl VoxelMeshGen {
         let chunk_size = CHUNK_SIZE as f32;
 
         for i in 0..voxels.len() {
+            if voxels[i] == false { continue }
             let voxel_coord = idx_to_vec3(i, CHUNK_SIZE) + job.pos * chunk_size;
-            verts.push(vert(voxel_coord.x + random(0.0, 1.0), voxel_coord.y + random(0.0, 1.0), voxel_coord.z + random(0.0, 1.0)));
-            inds.push(i as u32);
+
+            for &dx in &[0.0, 1.0] {
+                for &dy in &[0.0, 1.0] {
+                    for &dz in &[0.0, 1.0] {
+                        let x = voxel_coord.x + dx;
+                        let y = voxel_coord.y + dy;
+                        let z = voxel_coord.z + dz;
+
+                        verts.push(vert(x, y, z))
+                    }
+                }
+            }
+            let base_index = (voxel_coord.x * chunk_size * chunk_size + voxel_coord.y * chunk_size + voxel_coord.z) as u32 * 8;
+
+            let idx = [ 
+                [0, 1, 2, 1, 2, 3], // front
+                [4, 5, 6, 5, 6, 7], // back
+                [0, 1, 4, 1, 4, 5], // bottom
+                [2, 3, 6, 3, 6, 7], // top
+                [0, 2, 4, 2, 4, 6], // left
+                [1, 3, 5, 3, 5, 7], // right
+            ];
+
+            let idx_vec = idx.to_vec();
+
+            for i in 0..idx_vec.len() {
+                let face = idx_vec[i];
+                // if self.adjacent_voxs[i] == false {
+                    inds.extend(face.iter().map(|&j| base_index + j));
+                // }
+            }
         }
 
         let mesh = Mesh::new(verts, inds, instcs, &vk);

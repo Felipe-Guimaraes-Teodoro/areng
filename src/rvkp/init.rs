@@ -15,6 +15,7 @@ use vulkano::sync::{self, GpuFuture};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::swapchain::Surface;
 use vulkano::image::ImageUsage;
+use vulkano::image::view::ImageView;
 use vulkano::swapchain::{Swapchain, SwapchainCreateInfo};
 
 use std::sync::{Arc, Mutex};
@@ -49,6 +50,7 @@ pub struct Vk {
 
     pub swapchain: Option<Arc<vulkano::swapchain::Swapchain>>,
     pub images: Option<Vec<Arc<vulkano::image::Image>>>,
+    pub depth_buffer: Option <Arc<ImageView>>,
 
     pub resolution: [f32; 2],
 
@@ -133,6 +135,8 @@ impl Vk {
 
             swapchain: None, // will be initialized later on
             images: None,
+            depth_buffer: None, 
+
             camera,
         }
     }

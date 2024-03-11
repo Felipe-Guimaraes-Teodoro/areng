@@ -9,6 +9,9 @@ use vulkano::swapchain::{SwapchainPresentInfo, SwapchainAcquireFuture, PresentFu
 use vulkano::sync::{self, GpuFuture};
 use vulkano::sync::future::FenceSignalFuture;
 
+use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+use vulkano::memory::allocator::AllocationCreateInfo;
+
 use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{
     CommandBufferExecFuture,
@@ -33,7 +36,7 @@ use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
-
+use vulkano::format::Format;
 
 
 use vulkano::pipeline::GraphicsPipeline;
@@ -87,6 +90,7 @@ pub struct VkView {
     pub viewport: vulkano::pipeline::graphics::viewport::Viewport,
     pub shader_mods: Vec<Arc<vulkano::shader::ShaderModule>>,
     pub meshes: Vec<Mesh>,
+    pub depth_buffer: Arc<ImageView>,
     pub surface: Arc<Surface>,
     pub framebuffers : Vec<Arc<Framebuffer>>,
     pub render_pass: Arc<vulkano::render_pass::RenderPass>,
@@ -118,19 +122,38 @@ impl VkView {
             Mesh::quad(&vk),
         ];
 
+        
         let vs = vs::load(vk.device.clone()).unwrap();
         let fs = fs::load(vk.device.clone()).unwrap();
 
         vk.set_swapchain(surface.clone(), &window);
         let images = vk.images.clone().unwrap();
         let render_pass = vk.get_render_pass();
-        let framebuffers = vk.get_framebuffers(&render_pass);
         let (pipeline, layout) = vk.get_pipeline(
             vs.clone(), 
             fs.clone(), 
             render_pass.clone(), 
             viewport.clone()
         );
+
+        let depth_buffer = ImageView::new_default(
+            Image::new(
+                vk.mem_allocators.memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::D16_UNORM,
+                    extent: images[0].extent(),
+                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let framebuffers = vk.get_framebuffers(&render_pass, depth_buffer.clone());
+
 
         let command_buffers = vk.get_command_buffers(
             &pipeline, 
@@ -147,6 +170,7 @@ impl VkView {
             render_pass,
             viewport,
             meshes,
+            depth_buffer,
             shader_mods: vec![vs, fs],
             framebuffers,
             pipeline,
@@ -171,7 +195,7 @@ impl VkView {
 
             vk.swapchain = Some(new_swpchain);
             vk.images = Some(new_imgs);
-            self.framebuffers = vk.get_framebuffers(&self.render_pass);
+            self.framebuffers = vk.get_framebuffers(&self.render_pass, self.depth_buffer.clone());
 
             if *WINDOW_RESIZED.lock().unwrap() {
                 *WINDOW_RESIZED.lock().unwrap() = false;
@@ -280,10 +304,17 @@ impl Vk {
                     load_op: Clear,
                     store_op: Store,
                 },
+
+                depth_stencil: {
+                    format: Format::D24_UNORM_S8_UINT,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
+                }
             },
             pass: {
                 color: [color],
-                depth_stencil: {},
+                depth_stencil: {depth_stencil},
             },
         )
         .unwrap()
@@ -294,6 +325,7 @@ impl Vk {
         &self,
         // images: &[Arc<Image>],
         render_pass: &Arc<RenderPass>,
+        depth_buffer: Arc<ImageView>,
     ) -> Vec<Arc<Framebuffer>> {
         self.images.clone().unwrap().as_slice()
             .iter()
@@ -302,7 +334,7 @@ impl Vk {
                 Framebuffer::new(
                     render_pass.clone(),
                     FramebufferCreateInfo {
-                        attachments: vec![view],
+                        attachments: vec![view, depth_buffer.clone()],
                         ..Default::default()
                     },
                 )
@@ -349,6 +381,7 @@ impl Vk {
             None,
             GraphicsPipelineCreateInfo {
                 stages: stages.into_iter().collect(),
+                // depth_stencil_state: Some(depth_stencil_state),
                 vertex_input_state: Some(vertex_input_state),
                 input_assembly_state: Some(InputAssemblyState::default()),
                 viewport_state: Some(ViewportState {
@@ -361,6 +394,10 @@ impl Vk {
                     subpass.num_color_attachments(),
                     ColorBlendAttachmentState::default(),
                 )),
+                depth_stencil_state: Some(vulkano::pipeline::graphics::depth_stencil::DepthStencilState {
+                    depth: Some(vulkano::pipeline::graphics::depth_stencil::DepthState::simple()),
+                    ..Default::default()
+                }),
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(layout.clone())
             },
@@ -378,6 +415,7 @@ impl Vk {
         framebuffers
             .iter()
             .map(|framebuffer| {
+                let depth_attachment = framebuffer.attachments()[1].clone();
                 let mut builder = AutoCommandBufferBuilder::primary(
                     &self.mem_allocators.command_buffer_allocator,
                     self.queue.queue_family_index(),
@@ -390,7 +428,10 @@ impl Vk {
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
-                            clear_values: vec![Some([0.1, 0.11, 0.12, 1.0].into())],
+                            clear_values: vec![
+                                Some([0.1, 0.11, 0.12, 1.0].into()),
+                                Some(1f32.into()),
+                            ],
                             ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
                         },
                         SubpassBeginInfo {
