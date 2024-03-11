@@ -83,7 +83,10 @@ pub async fn run() {
                 let vk_clone = vk.clone();
                 if frame_id % 500 == 0 {
                     spawn(async {
-                        VOXGEN_CH.send(VoxelMeshGenJob::chunk(), view_clone, vk_clone).await;
+                        let cam_pos = vk_clone.lock().unwrap().camera.pos / 32.0;
+                        if let Some(job) = VoxelMeshGenJob::chunk(cam_pos.x, cam_pos.y, cam_pos.z) {
+                            VOXGEN_CH.send(job, view_clone, vk_clone).await;
+                        }
                     });
                 }
 

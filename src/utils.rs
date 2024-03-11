@@ -38,14 +38,15 @@ pub fn nth(n: u32) -> u32 {
 }
 
 pub fn vec3_to_idx(x: usize, y: usize, z: usize, size: usize,) -> usize {
-    x + size * (y + size * z)
+   z * size * size + y * size + x 
 }
 
 use glam::{Vec3A, vec3a};
-pub fn idx_to_vec3(index: f32, size: f32) -> Vec3A {
+pub fn idx_to_vec3(index: usize, size: usize) -> Vec3A {
     let z = index / (size * size);
-    let y = (index / size) % size;
-    let x = index % size;
+    let remaining = index % (size * size);
+    let y = remaining / size;
+    let x = remaining % size;
 
-    vec3a(x, y, z)
+    vec3a(x as f32, y as f32, z as f32)
 }

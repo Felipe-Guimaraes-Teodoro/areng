@@ -16,11 +16,20 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new() -> Self {  
+    pub fn new(
+        verts: Vec<crate::rvkp::presenter::FVertex3d>, 
+        inds: Vec<u32>,
+        instcs: Vec<crate::rvkp::presenter::InstanceData>,
+        vk: &Vk,
+    ) -> Self { 
+        let vert_buf = Some(vk.vertex_buffer(verts));
+        let ind_buf = Some(vk.index_buffer(inds));
+        let inst_buf = Some(vk.instance_buffer(instcs));
+
         Self {
-            vert_buf: None,
-            ind_buf: None,
-            inst_buf: None,
+            vert_buf,
+            ind_buf,
+            inst_buf,
         }
     }
 
