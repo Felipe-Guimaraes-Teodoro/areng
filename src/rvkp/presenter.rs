@@ -197,16 +197,17 @@ impl VkView {
             vk.images = Some(new_imgs);
             self.framebuffers = vk.get_framebuffers(&self.render_pass, self.depth_buffer.clone());
 
-            if *WINDOW_RESIZED.lock().unwrap() {
-                *WINDOW_RESIZED.lock().unwrap() = false;
-
-                self.viewport.extent = new_dim.into();
-                (self.pipeline, self.layout) = vk.get_pipeline(
+            (self.pipeline, self.layout) = vk.get_pipeline(
                     self.shader_mods[0].clone(), 
                     self.shader_mods[1].clone(), 
                     self.render_pass.clone(), 
                     self.viewport.clone()
-                );
+            );
+
+            if *WINDOW_RESIZED.lock().unwrap() {
+                *WINDOW_RESIZED.lock().unwrap() = false;
+
+                self.viewport.extent = new_dim.into();
             }
         }
     }
@@ -306,7 +307,7 @@ impl Vk {
                 },
 
                 depth_stencil: {
-                    format: Format::D24_UNORM_S8_UINT,
+                    format: Format::D16_UNORM,
                     samples: 1,
                     load_op: Clear,
                     store_op: DontCare,
@@ -415,7 +416,6 @@ impl Vk {
         framebuffers
             .iter()
             .map(|framebuffer| {
-                let depth_attachment = framebuffer.attachments()[1].clone();
                 let mut builder = AutoCommandBufferBuilder::primary(
                     &self.mem_allocators.command_buffer_allocator,
                     self.queue.queue_family_index(),

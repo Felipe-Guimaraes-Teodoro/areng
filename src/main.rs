@@ -7,6 +7,9 @@ mod mesh_gen;
 
 use rlua::Lua;
 
+/*
+ *  todo: rewrite rvkp 
+ */
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 12)]
 async fn main() {
