@@ -1,0 +1,17 @@
+{
+    "[rust]": {
+        "javascript.autoClosingTags": true,
+        "editor.fontSize": 14,
+        "editor.suggest.showTypeParameters": true,
+        "breadcrumbs.showTypeParameters": true,
+        "outline.showTypeParameters": true,
+        "editor.gotoLocation.multipleTypeDefinitions": "peek",
+        "editor.autoIndent": "full",
+        "editor.parameterHints.enabled": true,
+        "editor.inlayHints.enabled": "off",
+        "editor.inlayHints.padding": false,
+        "editor.useTabStops": true,
+        "emmet.triggerExpansionOnTab": false
+    },
+    "editor.cursorSmoothCaretAnimation": "on"
+}
