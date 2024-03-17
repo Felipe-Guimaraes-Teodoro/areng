@@ -33,7 +33,7 @@ async fn main() {
     });
 
     mesh_gen::init().await;
-    //event_loop::run().await;
+    event_loop::run().await;
 
-    vk_impl::VkImpl::new();
+    //vk_impl::VkImpl::new();
 }

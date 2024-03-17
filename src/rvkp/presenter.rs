@@ -90,7 +90,6 @@ pub struct VkView {
     pub viewport: vulkano::pipeline::graphics::viewport::Viewport,
     pub shader_mods: Vec<Arc<vulkano::shader::ShaderModule>>,
     pub meshes: Vec<Mesh>,
-    pub depth_buffer: Arc<ImageView>,
     pub surface: Arc<Surface>,
     pub framebuffers : Vec<Arc<Framebuffer>>,
     pub render_pass: Arc<vulkano::render_pass::RenderPass>,
@@ -136,23 +135,23 @@ impl VkView {
             viewport.clone()
         );
 
-        let depth_buffer = ImageView::new_default(
-            Image::new(
-                vk.mem_allocators.memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::D16_UNORM,
-                    extent: images[0].extent(),
-                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-            )
-            .unwrap(),
-        )
-        .unwrap();
+        //let depth_buffer = ImageView::new_default(
+        //    Image::new(
+        //        vk.mem_allocators.memory_allocator.clone(),
+        //        ImageCreateInfo {
+        //            image_type: ImageType::Dim2d,
+        //            format: Format::D16_UNORM,
+        //            extent: images[0].extent(),
+        //            usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+        //            ..Default::default()
+        //        },
+        //        AllocationCreateInfo::default(),
+        //    )
+        //   .unwrap(),
+        //)
+        //.unwrap();
 
-        let framebuffers = vk.get_framebuffers(&render_pass, depth_buffer.clone());
+        let framebuffers = vk.get_framebuffers(&render_pass);
 
 
         let command_buffers = vk.get_command_buffers(
@@ -170,7 +169,6 @@ impl VkView {
             render_pass,
             viewport,
             meshes,
-            depth_buffer,
             shader_mods: vec![vs, fs],
             framebuffers,
             pipeline,
@@ -195,7 +193,7 @@ impl VkView {
 
             vk.swapchain = Some(new_swpchain);
             vk.images = Some(new_imgs);
-            self.framebuffers = vk.get_framebuffers(&self.render_pass, self.depth_buffer.clone());
+            self.framebuffers = vk.get_framebuffers(&self.render_pass);
 
             (self.pipeline, self.layout) = vk.get_pipeline(
                     self.shader_mods[0].clone(), 
@@ -305,17 +303,10 @@ impl Vk {
                     load_op: Clear,
                     store_op: Store,
                 },
-
-                depth_stencil: {
-                    format: Format::D16_UNORM,
-                    samples: 1,
-                    load_op: Clear,
-                    store_op: DontCare,
-                }
             },
             pass: {
                 color: [color],
-                depth_stencil: {depth_stencil},
+                depth_stencil: {},
             },
         )
         .unwrap()
@@ -326,7 +317,6 @@ impl Vk {
         &self,
         // images: &[Arc<Image>],
         render_pass: &Arc<RenderPass>,
-        depth_buffer: Arc<ImageView>,
     ) -> Vec<Arc<Framebuffer>> {
         self.images.clone().unwrap().as_slice()
             .iter()
@@ -335,7 +325,7 @@ impl Vk {
                 Framebuffer::new(
                     render_pass.clone(),
                     FramebufferCreateInfo {
-                        attachments: vec![view, depth_buffer.clone()],
+                        attachments: vec![view],
                         ..Default::default()
                     },
                 )
@@ -395,10 +385,10 @@ impl Vk {
                     subpass.num_color_attachments(),
                     ColorBlendAttachmentState::default(),
                 )),
-                depth_stencil_state: Some(vulkano::pipeline::graphics::depth_stencil::DepthStencilState {
-                    depth: Some(vulkano::pipeline::graphics::depth_stencil::DepthState::simple()),
-                    ..Default::default()
-                }),
+                //depth_stencil_state: Some(vulkano::pipeline::graphics::depth_stencil::DepthStencilState {
+                //    depth: Some(vulkano::pipeline::graphics::depth_stencil::DepthState::simple()),
+                //    ..Default::default()
+                //}),
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(layout.clone())
             },
@@ -430,7 +420,7 @@ impl Vk {
                         RenderPassBeginInfo {
                             clear_values: vec![
                                 Some([0.1, 0.11, 0.12, 1.0].into()),
-                                Some(1f32.into()),
+                                // Some(1f32.into()),
                             ],
                             ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
                         },

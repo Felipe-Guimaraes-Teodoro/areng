@@ -1,18 +1,12 @@
 use std::{error::Error, sync::{Arc, Mutex}};
 use vulkano::{
-    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
-    command_buffer::{
-        allocator::StandardCommandBufferAllocator, CommandBufferLevel,
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage}, command_buffer::{
+        allocator::{CommandBufferAllocator, StandardCommandBufferAllocator}, CommandBufferLevel,
         CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
         SubpassContents,
-    },
-    device::{
+    }, descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator}, device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags
-    },
-    image::{view::ImageView, Image, ImageUsage},
-    instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
-    pipeline::{
+    }, format::Format, image::{view::ImageView, Image, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{
         graphics::{
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
             input_assembly::InputAssemblyState,
@@ -24,13 +18,9 @@ use vulkano::{
         },
         layout::PipelineDescriptorSetLayoutCreateInfo,
         DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
-    },
-    render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
-    swapchain::{
+    }, render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass}, shader::EntryPoint, swapchain::{
         self, acquire_next_image, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo
-    },
-    sync::{self, GpuFuture},
-    Validated, VulkanError, VulkanLibrary,
+    }, sync::{self, GpuFuture}, Validated, VulkanError, VulkanLibrary
 };
 use winit::{
     event::{Event, WindowEvent},
@@ -38,41 +28,66 @@ use winit::{
     window::WindowBuilder,
 };
 
-use super::init::Vk;
+use super::{init::Vk, vk_renderer::Renderer};
 
 struct Allocators {
     memory: Arc<StandardMemoryAllocator>,
+    descriptor_set: Arc<StandardDescriptorSetAllocator>,
+    command_buffer: Arc<StandardCommandBufferAllocator>,
+}
+
+struct Presenter {
+    image_extent: [u32; 2],
+
 }
 
 impl Allocators {
     fn new(device: Arc<Device>) -> Self {
         Self {
-            memory: Arc::new(StandardMemoryAllocator::new_default(device))
+            memory: Arc::new(StandardMemoryAllocator::new_default(device.clone())),
+            descriptor_set: Arc::new(StandardDescriptorSetAllocator::new(
+                device.clone(),
+                Default::default(),
+            )),
+            command_buffer: Arc::new(StandardCommandBufferAllocator::new(
+                device,
+                Default::default(),
+            )),
         }
     }
 }
 
 pub struct VkImpl {
-    window: Arc<winit::window::Window>,
-    event_loop: Arc<winit::event_loop::EventLoop<()>>,
-    surface: Arc<Surface>,
-    device: Arc<vulkano::device::Device>,
-    queue: Arc<Queue>,
+    pub window: Arc<winit::window::Window>,
+    pub event_loop: Arc<winit::event_loop::EventLoop<()>>,
+    pub surface: Arc<Surface>,
+    pub device: Arc<vulkano::device::Device>,
+    pub queue: Arc<Queue>,
 
     // some fields
-    swapchain: Option<Arc<vulkano::swapchain::Swapchain>>,
-    images: Option<Vec<Arc<Image>>>,
+    pub swapchain: Option<Arc<vulkano::swapchain::Swapchain>>,
+    pub images: Option<Vec<Arc<Image>>>,
+    pub render_pass: Option<Arc<RenderPass>>,
 
-    allocators: Option<Allocators>,
+    pub allocators: Option<Allocators>,
+
+    pub renderer: Option<Renderer>,
 }
 
 impl VkImpl {
     pub fn init() -> Arc<Mutex<Self>> {
-        let mut this = Self::new();
-        this.create_swapchain();
-        this.allocators = Some(Allocators::new(this.device.clone()));
+        let vk_impl = Arc::new(Mutex::new(Self::new()));
+        let vk_clone = vk_impl.clone();
+        let mut vk = vk_clone.lock().unwrap();
 
-        Arc::new(Mutex::new(this))
+        let renderer = Renderer::new(vk_impl.clone());
+
+        vk.create_swapchain();
+        vk.create_render_pass();
+        vk.allocators = Some(Allocators::new(vk.device.clone()));
+        vk.renderer = Some(renderer);
+
+        vk_impl
     }
 
     pub fn new() -> Self {
@@ -153,8 +168,11 @@ impl VkImpl {
 
             swapchain: None,
             images: None,
+            render_pass: None,
 
             allocators: None,
+
+            renderer: None,
         }
     } // new
 
@@ -191,5 +209,32 @@ impl VkImpl {
 
         self.swapchain = Some(swapchain);
         self.images = Some(images);
+    }
+
+    fn create_render_pass(&mut self) { 
+        let render_pass = vulkano::single_pass_renderpass!(
+            self.device.clone(),
+            attachments: {
+                color: {
+                    format: self.swapchain.clone().unwrap().image_format(),
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
+                },
+                depth_stencil: {
+                    format: Format::D16_UNORM,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
+                },
+            },
+            pass: {
+                color: [color],
+                depth_stencil: {depth_stencil},
+            },
+        )
+        .unwrap();
+
+        self.render_pass = Some(render_pass);
     }
 }
