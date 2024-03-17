@@ -5,19 +5,11 @@ use vulkano::{
         CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
         SubpassContents,
     }, descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator}, device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags
-    }, format::Format, image::{view::ImageView, Image, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{
+        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags
+    }, format::Format, image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{
         graphics::{
-            color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            input_assembly::InputAssemblyState,
-            multisample::MultisampleState,
-            rasterization::RasterizationState,
-            vertex_input::{Vertex, VertexDefinition},
-            viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
-        },
-        layout::PipelineDescriptorSetLayoutCreateInfo,
-        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+            color_blend::{ColorBlendAttachmentState, ColorBlendState}, depth_stencil::{DepthState, DepthStencilState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::{Vertex, VertexDefinition}, viewport::{Viewport, ViewportState}, GraphicsPipelineCreateInfo
+        }, layout::PipelineDescriptorSetLayoutCreateInfo, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo
     }, render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass}, shader::EntryPoint, swapchain::{
         self, acquire_next_image, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo
     }, sync::{self, GpuFuture}, Validated, VulkanError, VulkanLibrary
@@ -28,17 +20,15 @@ use winit::{
     window::WindowBuilder,
 };
 
+use crate::rvkp::vk_renderer::RVertex3d;
+
 use super::{init::Vk, vk_renderer::Renderer};
 
-struct Allocators {
-    memory: Arc<StandardMemoryAllocator>,
-    descriptor_set: Arc<StandardDescriptorSetAllocator>,
-    command_buffer: Arc<StandardCommandBufferAllocator>,
-}
-
-struct Presenter {
-    image_extent: [u32; 2],
-
+#[derive(Debug)]
+pub struct Allocators {
+    pub memory: Arc<StandardMemoryAllocator>,
+    pub descriptor_set: Arc<StandardDescriptorSetAllocator>,
+    pub command_buffer: Arc<StandardCommandBufferAllocator>,
 }
 
 impl Allocators {
@@ -57,42 +47,45 @@ impl Allocators {
     }
 }
 
+#[derive(Debug)]
 pub struct VkImpl {
     pub window: Arc<winit::window::Window>,
-    pub event_loop: Arc<winit::event_loop::EventLoop<()>>,
     pub surface: Arc<Surface>,
     pub device: Arc<vulkano::device::Device>,
     pub queue: Arc<Queue>,
 
     // some fields
     pub swapchain: Option<Arc<vulkano::swapchain::Swapchain>>,
-    pub images: Option<Vec<Arc<Image>>>,
+    pub images: Vec<Arc<Image>>,
     pub render_pass: Option<Arc<RenderPass>>,
+    pub framebuffers: Vec<Arc<Framebuffer>>,
+    pub pipeline: Option<Arc<GraphicsPipeline>>,
 
-    pub allocators: Option<Allocators>,
+    pub allocators: Option<Arc<Allocators>>,
 
-    pub renderer: Option<Renderer>,
+    pub renderer: Option<Arc<Mutex<Renderer>>>,
 }
 
 impl VkImpl {
-    pub fn init() -> Arc<Mutex<Self>> {
-        let vk_impl = Arc::new(Mutex::new(Self::new()));
+    pub fn init(event_loop: EventLoop<()>) {
+        let vk_impl = Arc::new(Mutex::new(Self::new(&event_loop)));
         let vk_clone = vk_impl.clone();
         let mut vk = vk_clone.lock().unwrap();
 
-        let renderer = Renderer::new(vk_impl.clone());
+        let mut renderer = Renderer::new(vk_impl.clone());
 
         vk.create_swapchain();
         vk.create_render_pass();
-        vk.allocators = Some(Allocators::new(vk.device.clone()));
-        vk.renderer = Some(renderer);
+        vk.allocators = Some(Arc::new(Allocators::new(vk.device.clone())));
+        vk.renderer = Some(Arc::new(Mutex::new(renderer)));
+        Self::window_size_dependent_setup(vk_impl.clone());
 
-        vk_impl
+        dbg!(&vk_impl);
+
+        vk.renderer.clone().unwrap().lock().unwrap().run(event_loop);
     }
 
-    pub fn new() -> Self {
-        let event_loop = EventLoop::new();
-
+    pub fn new(event_loop: &EventLoop<()>) -> Self {
         let library = VulkanLibrary::new().unwrap();
 
         let required_extensions = Surface::required_extensions(&event_loop);
@@ -161,14 +154,15 @@ impl VkImpl {
 
         Self {
             window,
-            event_loop: event_loop.into(),
             surface,
             device,
             queue,
 
             swapchain: None,
-            images: None,
+            images: vec![],
             render_pass: None,
+            framebuffers: vec![],
+            pipeline: None,
 
             allocators: None,
 
@@ -208,7 +202,7 @@ impl VkImpl {
         };
 
         self.swapchain = Some(swapchain);
-        self.images = Some(images);
+        self.images = images;
     }
 
     fn create_render_pass(&mut self) { 
@@ -236,5 +230,99 @@ impl VkImpl {
         .unwrap();
 
         self.render_pass = Some(render_pass);
+    }
+
+    fn window_size_dependent_setup(vk_impl: Arc<Mutex<VkImpl>>) {
+        let vk_clone = vk_impl.clone();
+        let mut vk = vk_clone.lock().unwrap();
+        let device = vk.allocators.clone().unwrap().memory.device().clone();
+
+        let vs = vk.renderer.clone().unwrap().lock().unwrap().shaders[0].clone().entry_point("main").unwrap();
+        let fs = vk.renderer.clone().unwrap().lock().unwrap().shaders[0].clone().entry_point("main").unwrap();
+
+        let extent = vk.images.clone()[0].extent();
+
+        let depth_buffer = ImageView::new_default(
+            Image::new(
+                vk.allocators.clone().unwrap().memory.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::D16_UNORM,
+                    extent: vk.images.clone()[0].extent(),
+                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            ).unwrap(),
+        ).unwrap();
+
+        let framebuffers = vk.images.clone()
+            .iter()
+            .map(|image| {
+                let view = ImageView::new_default(image.clone()).unwrap();
+                Framebuffer::new(
+                    vk.render_pass.clone().unwrap(),
+                    FramebufferCreateInfo {
+                        attachments: vec![view, depth_buffer.clone()],
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+            let pipeline = {
+                let vertex_input_state = [RVertex3d::per_vertex()]
+                    .definition(&vs.info().input_interface)
+                    .unwrap();
+                let stages = [
+                    PipelineShaderStageCreateInfo::new(vs),
+                    PipelineShaderStageCreateInfo::new(fs),
+                ];
+                let layout = PipelineLayout::new(
+                    device.clone(),
+                    PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
+                        .into_pipeline_layout_create_info(device.clone())
+                        .unwrap(),
+                )
+                .unwrap();
+                let subpass = Subpass::from(vk.render_pass.clone().unwrap(), 0).unwrap();
+        
+                GraphicsPipeline::new(
+                    device,
+                    None,
+                    GraphicsPipelineCreateInfo {
+                        stages: stages.into_iter().collect(),
+                        vertex_input_state: Some(vertex_input_state),
+                        input_assembly_state: Some(InputAssemblyState::default()),
+                        viewport_state: Some(ViewportState {
+                            viewports: [Viewport {
+                                offset: [0.0, 0.0],
+                                extent: [extent[0] as f32, extent[1] as f32],
+                                depth_range: 0.0..=1.0,
+                            }]
+                            .into_iter()
+                            .collect(),
+                            ..Default::default()
+                        }),
+                        rasterization_state: Some(RasterizationState::default()),
+                        depth_stencil_state: Some(DepthStencilState {
+                            depth: Some(DepthState::simple()),
+                            ..Default::default()
+                        }),
+                        multisample_state: Some(MultisampleState::default()),
+                        color_blend_state: Some(ColorBlendState::with_attachment_states(
+                            subpass.num_color_attachments(),
+                            ColorBlendAttachmentState::default(),
+                        )),
+                        subpass: Some(subpass.into()),
+                        ..GraphicsPipelineCreateInfo::layout(layout)
+                    },
+                )
+                .unwrap()
+            };
+        
+        vk.framebuffers = framebuffers;
+        vk.pipeline = Some(pipeline);
     }
 }

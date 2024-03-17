@@ -7,6 +7,7 @@ mod mesh_gen;
 
 use rlua::Lua;
 use rvkp::{init::Vk, vk_impl};
+use winit::event_loop::EventLoop;
 
 /*
  *  todo: rewrite rvkp 
@@ -32,8 +33,10 @@ async fn main() {
         }
     });
 
-    mesh_gen::init().await;
-    event_loop::run().await;
+    // mesh_gen::init().await;
+    //event_loop::run().await;
 
-    //vk_impl::VkImpl::new();
+    let event_loop = EventLoop::new();
+
+    vk_impl::VkImpl::init(event_loop);
 }
