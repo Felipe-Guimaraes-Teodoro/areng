@@ -67,25 +67,7 @@ pub struct VkImpl {
 }
 
 impl VkImpl {
-    pub fn init(event_loop: EventLoop<()>) {
-        let vk_impl = Arc::new(Mutex::new(Self::new(&event_loop)));
-        let vk_clone = vk_impl.clone();
-        let mut vk = vk_clone.lock().unwrap();
-
-        let mut renderer = Renderer::new(vk_impl.clone());
-
-        vk.create_swapchain();
-        vk.create_render_pass();
-        vk.allocators = Some(Arc::new(Allocators::new(vk.device.clone())));
-        vk.renderer = Some(Arc::new(Mutex::new(renderer)));
-        Self::window_size_dependent_setup(vk_impl.clone());
-
-        dbg!(&vk_impl);
-
-        vk.renderer.clone().unwrap().lock().unwrap().run(event_loop);
-    }
-
-    pub fn new(event_loop: &EventLoop<()>) -> Self {
+    pub async fn new(event_loop: &EventLoop<()>) -> Arc<Mutex<Self>> {
         let library = VulkanLibrary::new().unwrap();
 
         let required_extensions = Surface::required_extensions(&event_loop);
@@ -152,7 +134,7 @@ impl VkImpl {
 
         let queue = queues.next().unwrap();
 
-        Self {
+        Arc::new(Mutex::new(Self {
             window,
             surface,
             device,
@@ -167,8 +149,15 @@ impl VkImpl {
             allocators: None,
 
             renderer: None,
-        }
+        }))
     } // new
+
+    pub fn ignition(&mut self, renderer: Arc<Mutex<Renderer>>) {
+        self.create_swapchain();
+        self.create_render_pass();
+        self.allocators = Some(Arc::new(Allocators::new(self.device.clone())));
+        self.renderer = Some(renderer);
+    }
 
     fn create_swapchain(&mut self) {
         let (swapchain, images) = {

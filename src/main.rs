@@ -5,8 +5,10 @@ mod ui;
 mod utils;
 mod mesh_gen;
 
-use rlua::Lua;
-use rvkp::{init::Vk, vk_impl};
+use std::sync::{Arc, Mutex};
+
+use once_cell::sync::Lazy;
+use rvkp::{init::Vk, vk_impl, vk_renderer::Renderer};
 use winit::event_loop::EventLoop;
 
 /*
@@ -15,28 +17,15 @@ use winit::event_loop::EventLoop;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 12)]
 async fn main() {
-    std::thread::spawn(|| {
-        let lua = Lua::new();
-
-        loop {
-            lua.globals().set(
-                "hello",
-                lua.create_function(|_, n: u32| {
-                    println!("{:?}", utils::nth(n));
-                    return Ok(());
-                }).unwrap(),
-            ).unwrap();
-
-            let mut input = String::new();
-            let _ = std::io::stdin().read_line(&mut input); 
-            if let Ok(_chunk) = lua.load(input).set_name("user").exec() {}
-        }
-    });
-
     // mesh_gen::init().await;
     //event_loop::run().await;
 
     let event_loop = EventLoop::new();
 
-    vk_impl::VkImpl::init(event_loop);
+    let vk = vk_impl::VkImpl::new(&event_loop).await;
+    let renderer = Renderer::new(vk.clone()).await;
+
+    vk.lock().unwrap().ignition(renderer.clone());
+
+    renderer.lock().unwrap().run(event_loop); // now we're talking
 }
