@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex, shader::{EntryPoint, ShaderModule}};
 use winit::{event::{Event, WindowEvent}, event_loop::EventLoop};
 
+use crate::utils::random;
+
 use super::{mesh::Mesh, shader, vk_impl::VkImpl};
 
 #[repr(C)]
@@ -14,11 +16,19 @@ pub struct RVertex3d {
     color: [f32; 3],
 }
 
-#[derive(Debug)]
+impl RVertex3d {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        RVertex3d {
+            position: [x, y, z],
+            color: [random(0.0, 1.0), random(0.0, 1.0), random(0.0, 1.0)]
+        }
+    }
+}
+
 pub struct Renderer {
     pub vk_impl: Arc<Mutex<VkImpl>>,
     
-    //pub meshes: Vec<Mesh>,
+    pub meshes: Vec<Mesh>,
     pub shaders: Vec<Arc<ShaderModule>>,
 }
 
@@ -33,45 +43,14 @@ impl Renderer {
 
         Arc::new(Mutex::new(Self {
             vk_impl,
-            //meshes: vec![],
+            meshes: vec![],
             shaders,
         }))
     }
-    
-    pub fn run(&mut self, event_loop: EventLoop<()>) {
-        let vk_clone = self.vk_impl.clone();
-        let vk = vk_clone.lock().unwrap();
 
-        event_loop.run(move |event, _, control_flow| {
-            match event {
-                Event::WindowEvent { 
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => {
-                    *control_flow = winit::event_loop::ControlFlow::Exit;
-                },
-                
-                Event::WindowEvent {
-                    event: WindowEvent::Resized(_),
-                    ..
-                } => {
-                },
-    
-                Event::WindowEvent {
-                    event,
-                    ..
-                } => {
-                },
-                
-                Event::DeviceEvent {event: winit::event::DeviceEvent::MouseMotion { delta },..} => {
-                }
-    
-                Event::MainEventsCleared => {
+    pub fn update(&mut self) {
+        let vk = self.vk_impl.lock().unwrap();
 
-                },
-    
-                _ => () 
-            }
-        });
+        //VkImpl::window_size_dependent_setup(self.vk_impl.clone());
     }
 }

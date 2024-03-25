@@ -6,6 +6,9 @@ use crate::rvkp::init::Vk;
 use crate::rvkp::presenter::vert;
 use crate::rvkp::presenter::InstanceData;
 
+use super::vk_impl::VkImpl;
+use super::vk_renderer::RVertex3d;
+
 
 #[derive(Clone)]
 pub struct Mesh {
@@ -33,13 +36,13 @@ impl Mesh {
         }
     }
 
-    pub fn quad(vk: &Vk) -> Self {
+    pub fn quad(vk: &VkImpl) -> Self {
         let vert_buf = vk.vertex_buffer(
             vec![
-                vert(0.1, 0.1, 0.0), 
-                vert(0.1, -0.1, 0.0),
-                vert(-0.1, 0.1, 0.0),
-                vert(-0.1, -0.1, 0.0),
+                RVertex3d::new(0.1, 0.1, 0.0), 
+                RVertex3d::new(0.1, -0.1, 0.0),
+                RVertex3d::new(-0.1, 0.1, 0.0),
+                RVertex3d::new(-0.1, -0.1, 0.0),
             ],
         );
 

@@ -12,7 +12,7 @@ use rvkp::{init::Vk, vk_impl, vk_renderer::Renderer};
 use winit::event_loop::EventLoop;
 
 /*
- *  todo: rewrite rvkp 
+ *  todo: implement the new rvkp
  */
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 12)]
@@ -27,5 +27,5 @@ async fn main() {
 
     vk.lock().unwrap().ignition(renderer.clone());
 
-    renderer.lock().unwrap().run(event_loop); // now we're talking
+    event_loop::run(event_loop, renderer.clone()).await; // now we're talking
 }

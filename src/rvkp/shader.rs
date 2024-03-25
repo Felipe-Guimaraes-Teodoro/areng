@@ -47,6 +47,3 @@ pub mod fs {
         path: "src/shaders/frag.frag"
     }
 }
-
-
-

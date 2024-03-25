@@ -1,6 +1,6 @@
 use std::{error::Error, sync::{Arc, Mutex}};
 use vulkano::{
-    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage}, command_buffer::{
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, command_buffer::{
         allocator::{CommandBufferAllocator, StandardCommandBufferAllocator}, CommandBufferLevel,
         CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
         SubpassContents,
@@ -47,7 +47,6 @@ impl Allocators {
     }
 }
 
-#[derive(Debug)]
 pub struct VkImpl {
     pub window: Arc<winit::window::Window>,
     pub surface: Arc<Surface>,
@@ -83,6 +82,7 @@ impl VkImpl {
         .unwrap();
 
         let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
+    
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
 
         let device_extensions = DeviceExtensions {
@@ -221,7 +221,7 @@ impl VkImpl {
         self.render_pass = Some(render_pass);
     }
 
-    fn window_size_dependent_setup(vk_impl: Arc<Mutex<VkImpl>>) {
+    pub fn window_size_dependent_setup(vk_impl: Arc<Mutex<VkImpl>>) {
         let vk_clone = vk_impl.clone();
         let mut vk = vk_clone.lock().unwrap();
         let device = vk.allocators.clone().unwrap().memory.device().clone();
@@ -313,5 +313,21 @@ impl VkImpl {
         
         vk.framebuffers = framebuffers;
         vk.pipeline = Some(pipeline);
+    }
+
+    pub fn vertex_buffer(&self, vertices: Vec<RVertex3d>) -> Subbuffer<[RVertex3d]> {
+        Buffer::from_iter(
+            self.allocators.unwrap().memory.clone(), 
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default() 
+            }, 
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            }, 
+            vertices,
+        ).unwrap()
     }
 }
