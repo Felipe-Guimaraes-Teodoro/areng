@@ -117,9 +117,7 @@ impl VkView {
             depth_range: 0.0..=1.0,
         };
 
-        let meshes = vec![
-            Mesh::quad(&vk),
-        ];
+        let meshes = vec![];
 
         
         let vs = vs::load(vk.device.clone()).unwrap();

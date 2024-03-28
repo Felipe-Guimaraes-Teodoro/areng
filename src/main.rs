@@ -23,9 +23,10 @@ async fn main() {
     let event_loop = EventLoop::new();
 
     let vk = vk_impl::VkImpl::new(&event_loop).await;
+    println!("vk initialized");
     let renderer = Renderer::new(vk.clone()).await;
-
+    println!("main renderer initialized");
     vk.lock().unwrap().ignition(renderer.clone());
-
+    println!("ignited");
     event_loop::run(event_loop, renderer.clone()).await; // now we're talking
 }

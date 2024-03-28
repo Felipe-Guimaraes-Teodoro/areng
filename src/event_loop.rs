@@ -20,13 +20,6 @@ use crate::mesh_gen::{VOXGEN_CH, VoxelMeshGenJob};
 use tokio::spawn;
 
 pub async fn run(event_loop: EventLoop<()>, renderer: Arc<Mutex<Renderer>>) {  
-    let renderer = renderer.lock().unwrap();
-
-    let vk_clone = renderer.vk_impl.clone();
-    let vk = vk_clone.lock().unwrap();
-
-    vk.window.set_title("@");
-
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { 
@@ -51,11 +44,15 @@ pub async fn run(event_loop: EventLoop<()>, renderer: Arc<Mutex<Renderer>>) {
             
             Event::DeviceEvent {event: winit::event::DeviceEvent::MouseMotion { delta },..} => {
 
-            }
+            },
 
             Event::MainEventsCleared => {
-                renderer.meshes.push(Mesh::quad(vk_clone.clone()));
-            },
+                //let mut renderer = renderer.lock().unwrap();
+                //let vk_clone = renderer.vk_impl.clone();
+
+                //renderer.update();
+                //renderer.meshes.push(Mesh::quad(&vk_clone.clone().lock().unwrap()));
+            }
 
             _ => () 
         }

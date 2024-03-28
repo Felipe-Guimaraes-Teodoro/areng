@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use vulkano::buffer::subbuffer::Subbuffer;
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
@@ -12,7 +14,7 @@ use super::vk_renderer::RVertex3d;
 
 #[derive(Clone)]
 pub struct Mesh {
-    pub vert_buf: Option<Subbuffer<[crate::rvkp::presenter::FVertex3d]>>,    
+    pub vert_buf: Option<Subbuffer<[RVertex3d]>>,    
     pub ind_buf: Option<Subbuffer<[u32]>>,    
     pub inst_buf: Option<Subbuffer<[crate::rvkp::presenter::InstanceData]>>,
     // transform_mat: [[f32; 4];4],
@@ -20,19 +22,19 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn new(
-        verts: Vec<crate::rvkp::presenter::FVertex3d>, 
+        verts: Vec<RVertex3d>, 
         inds: Vec<u32>,
         instcs: Vec<crate::rvkp::presenter::InstanceData>,
-        vk: &Vk,
+        vk: &VkImpl,
     ) -> Self { 
         let vert_buf = Some(vk.vertex_buffer(verts));
         let ind_buf = Some(vk.index_buffer(inds));
-        let inst_buf = Some(vk.instance_buffer(instcs));
+        //let inst_buf = Some(vk.instance_buffer(instcs));
 
         Self {
             vert_buf,
             ind_buf,
-            inst_buf,
+            inst_buf: None, // for now
         }
     }
 
@@ -47,38 +49,33 @@ impl Mesh {
         );
 
         let ind_buf = vk.index_buffer(vec![0, 1, 2, 2, 1, 3]);
-        let inst_buf = vk.instance_buffer(vec![
-            InstanceData {
-                ofs: [0.0, 0.0, 0.0],
-                fun_factor: [0.0, 0.0, 0.0],
-            }
-        ]);
+        let inst_buf = None;
 
         Self {
             vert_buf: Some(vert_buf),
             ind_buf: Some(ind_buf),
-            inst_buf: Some(inst_buf),
+            inst_buf,
         }
     }
 
-    pub fn vertices(mut self, v: Vec<crate::rvkp::presenter::FVertex3d>, vk: &Vk) -> Self {
+    pub fn vertices(mut self, v: Vec<RVertex3d>, vk: &VkImpl) -> Self {
         self.vert_buf = Some(vk.vertex_buffer(v));
 
         self
     }
 
-    pub fn indices(mut self, i: Vec<u32>, vk: &Vk) -> Self {
+    pub fn indices(mut self, i: Vec<u32>, vk: &VkImpl) -> Self {
         self.ind_buf = Some(vk.index_buffer(i));
 
         self
     }
 
+    // TODO!
     pub fn instances(mut self, i: Vec<crate::rvkp::presenter::InstanceData>, vk: &Vk) -> Self {
         self.inst_buf = Some(vk.instance_buffer(i));
 
         self
     }
-
 
     pub fn draw(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<StandardCommandBufferAllocator>>) {
         let vert_buf = self.vert_buf.clone().unwrap();

@@ -158,8 +158,8 @@ impl VoxelMeshGen {
             }
         }
 
-        let mesh = Mesh::new(verts, inds, instcs, &vk);
+        //let mesh = Mesh::new(verts, inds, instcs, &vk);
 
-        mesh
+        todo!()
     }
 }

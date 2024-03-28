@@ -41,6 +41,10 @@ impl Renderer {
             shader::fs::load(vk.device.clone()).unwrap(),
         ];
 
+        VkImpl::window_size_dependent_setup(
+            vk_impl.clone(),
+        );
+
         Arc::new(Mutex::new(Self {
             vk_impl,
             meshes: vec![],
@@ -49,7 +53,7 @@ impl Renderer {
     }
 
     pub fn update(&mut self) {
-        let vk = self.vk_impl.lock().unwrap();
+        //dbg!(self.vk_impl.lock().unwrap().pipeline.clone().unwrap().flags());
 
         //VkImpl::window_size_dependent_setup(self.vk_impl.clone());
     }

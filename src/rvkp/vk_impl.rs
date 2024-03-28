@@ -221,13 +221,15 @@ impl VkImpl {
         self.render_pass = Some(render_pass);
     }
 
-    pub fn window_size_dependent_setup(vk_impl: Arc<Mutex<VkImpl>>) {
+    pub fn window_size_dependent_setup(vk_impl: Arc<Mutex<VkImpl>>)
+    -> (Arc<GraphicsPipeline>, Vec<Arc<Framebuffer>>) {
         let vk_clone = vk_impl.clone();
         let mut vk = vk_clone.lock().unwrap();
         let device = vk.allocators.clone().unwrap().memory.device().clone();
 
         let vs = vk.renderer.clone().unwrap().lock().unwrap().shaders[0].clone().entry_point("main").unwrap();
         let fs = vk.renderer.clone().unwrap().lock().unwrap().shaders[0].clone().entry_point("main").unwrap();
+
 
         let extent = vk.images.clone()[0].extent();
 
@@ -310,14 +312,13 @@ impl VkImpl {
                 )
                 .unwrap()
             };
-        
-        vk.framebuffers = framebuffers;
-        vk.pipeline = Some(pipeline);
+
+        (pipeline, framebuffers)
     }
 
     pub fn vertex_buffer(&self, vertices: Vec<RVertex3d>) -> Subbuffer<[RVertex3d]> {
         Buffer::from_iter(
-            self.allocators.unwrap().memory.clone(), 
+            self.allocators.clone().unwrap().memory.clone(), 
             BufferCreateInfo {
                 usage: BufferUsage::VERTEX_BUFFER,
                 ..Default::default() 
@@ -329,5 +330,22 @@ impl VkImpl {
             }, 
             vertices,
         ).unwrap()
+    }
+
+    pub fn index_buffer(&self, indices: Vec<u32>) -> Subbuffer<[u32]> {
+        Buffer::from_iter(
+            self.allocators.clone().unwrap().memory.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::INDEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            indices,
+        )
+        .unwrap()
     }
 }
