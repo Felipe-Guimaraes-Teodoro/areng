@@ -63,6 +63,9 @@ pub struct VkImpl {
     pub allocators: Option<Arc<Allocators>>,
 
     pub renderer: Option<Arc<Mutex<Renderer>>>,
+
+    pub recreate_swapchain: bool,
+    pub previous_frame_end: Option<Box<(dyn GpuFuture + 'static)>>,
 }
 
 impl VkImpl {
@@ -149,6 +152,10 @@ impl VkImpl {
             allocators: None,
 
             renderer: None,
+
+            recreate_swapchain: false,
+            previous_frame_end: None,
+            
         }))
     } // new
 
@@ -157,6 +164,10 @@ impl VkImpl {
         self.create_render_pass();
         self.allocators = Some(Arc::new(Allocators::new(self.device.clone())));
         self.renderer = Some(renderer);
+
+        VkImpl::window_size_dependent_setup(
+            self,
+        );
     }
 
     fn create_swapchain(&mut self) {
@@ -221,14 +232,12 @@ impl VkImpl {
         self.render_pass = Some(render_pass);
     }
 
-    pub fn window_size_dependent_setup(vk_impl: Arc<Mutex<VkImpl>>)
+    pub fn window_size_dependent_setup(vk: &mut VkImpl)
     -> (Arc<GraphicsPipeline>, Vec<Arc<Framebuffer>>) {
-        let vk_clone = vk_impl.clone();
-        let mut vk = vk_clone.lock().unwrap();
         let device = vk.allocators.clone().unwrap().memory.device().clone();
 
         let vs = vk.renderer.clone().unwrap().lock().unwrap().shaders[0].clone().entry_point("main").unwrap();
-        let fs = vk.renderer.clone().unwrap().lock().unwrap().shaders[0].clone().entry_point("main").unwrap();
+        let fs = vk.renderer.clone().unwrap().lock().unwrap().shaders[1].clone().entry_point("main").unwrap();
 
 
         let extent = vk.images.clone()[0].extent();
@@ -239,7 +248,7 @@ impl VkImpl {
                 ImageCreateInfo {
                     image_type: ImageType::Dim2d,
                     format: Format::D16_UNORM,
-                    extent: vk.images.clone()[0].extent(),
+                     extent: vk.images.clone()[0].extent(),
                     usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
                     ..Default::default()
                 },
@@ -347,5 +356,35 @@ impl VkImpl {
             indices,
         )
         .unwrap()
+    }
+
+    pub fn prepare_for_presentation(&mut self) {
+        
+    }
+
+    pub fn if_recreate_swapchain(&mut self) {
+        let image_extent: [u32; 2] = self.window.inner_size().into();
+        if image_extent.contains(&0) {
+            return;
+        }
+
+        self.previous_frame_end.as_mut().unwrap().cleanup_finished();
+
+        if self.recreate_swapchain {
+            let (new_swapchain, new_images) = self.swapchain.unwrap()
+            .recreate(SwapchainCreateInfo {
+                image_extent,
+                ..self.swapchain.unwrap().create_info()
+            })
+            .expect("failed to recreate swapchain");
+    
+            self.swapchain = Some(new_swapchain);
+            let (new_pipeline, new_framebuffers) = VkImpl::window_size_dependent_setup(
+                &mut self,
+            );
+            self.pipeline = Some(new_pipeline);
+            self.framebuffers = new_framebuffers;
+            self.recreate_swapchain = false;
+        }
     }
 }
