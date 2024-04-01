@@ -19,7 +19,7 @@ use crate::mesh_gen::{VOXGEN_CH, VoxelMeshGenJob};
 
 use tokio::spawn;
 
-pub async fn run(event_loop: EventLoop<()>, renderer: Arc<Mutex<Renderer>>) {  
+pub async fn run(event_loop: EventLoop<()>, renderer: Arc<Mutex<Renderer>>) {
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { 
@@ -47,11 +47,15 @@ pub async fn run(event_loop: EventLoop<()>, renderer: Arc<Mutex<Renderer>>) {
             },
 
             Event::MainEventsCleared => {
-                //let mut renderer = renderer.lock().unwrap();
-                //let vk_clone = renderer.vk_impl.clone();
+                let renderer_clone = renderer.clone();
+                let mut renderer = renderer_clone.lock().unwrap();
+                let vk_clone = renderer.vk_impl.clone();
 
-                //renderer.update();
-                //renderer.meshes.push(Mesh::quad(&vk_clone.clone().lock().unwrap()));
+                std::sync::Once::new().call_once(|| {
+                    renderer.meshes.push(Mesh::quad(&vk_clone.lock().unwrap()));
+                });
+
+                renderer.update();
             }
 
             _ => () 

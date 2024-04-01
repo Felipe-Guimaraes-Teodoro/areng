@@ -433,7 +433,7 @@ impl Vk {
                     // .push_constants(layout.clone(), 0, push_constant)
                 
 
-                let mut builder = self.camera.send_push_constants(builder, layout);
+                //let mut builder = self.camera.send_push_constants(builder, layout);
 
                 if let Some(vk_view) = vk_view {
                     for mesh in &vk_view.meshes {

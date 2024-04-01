@@ -191,9 +191,9 @@ impl Camera {
 
     pub fn send_push_constants(
         &mut self, 
-        mut builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<StandardCommandBufferAllocator>>, 
+        mut builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>, 
         layout: &Arc<PipelineLayout> 
-        ) ->  AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<StandardCommandBufferAllocator>>
+        ) ->  AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>
     {
         builder
             .push_constants(layout.clone(), 0, PushConstantCameraData {

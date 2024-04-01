@@ -1,9 +1,7 @@
-use std::{error::Error, sync::{Arc, Mutex}};
+use std::{error::Error, sync::{Arc, Mutex, RwLock}};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, command_buffer::{
-        allocator::{CommandBufferAllocator, StandardCommandBufferAllocator}, CommandBufferLevel,
-        CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
-        SubpassContents,
+        self, allocator::{CommandBufferAllocator, StandardCommandBufferAllocator}, AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferLevel, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents
     }, descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator}, device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags
     }, format::Format, image::{view::ImageView, Image, ImageCreateInfo, ImageType, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{
@@ -11,8 +9,8 @@ use vulkano::{
             color_blend::{ColorBlendAttachmentState, ColorBlendState}, depth_stencil::{DepthState, DepthStencilState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::{Vertex, VertexDefinition}, viewport::{Viewport, ViewportState}, GraphicsPipelineCreateInfo
         }, layout::PipelineDescriptorSetLayoutCreateInfo, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo
     }, render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass}, shader::EntryPoint, swapchain::{
-        self, acquire_next_image, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo
-    }, sync::{self, GpuFuture}, Validated, VulkanError, VulkanLibrary
+        self, acquire_next_image, PresentFuture, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo
+    }, sync::{self, future::{FenceSignalFuture, JoinFuture}, GpuFuture}, Validated, VulkanError, VulkanLibrary
 };
 use winit::{
     event::{Event, WindowEvent},
@@ -47,6 +45,117 @@ impl Allocators {
     }
 }
 
+pub struct VkPresenter {
+    pub recreate_swapchain: bool,
+    
+
+    pub previous_frame_end: Option<Box<(dyn GpuFuture + 'static)>>,
+    pub frames_in_flight: usize,
+
+    previous_fence_i: u32,
+    fences: Vec<Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>>>>>,
+}
+
+impl VkPresenter {
+    pub fn new(vk: &VkImpl) -> Self {
+        let mut fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; 1];
+
+        Self {
+            recreate_swapchain: false,
+            frames_in_flight: vk.images.len(),
+            previous_frame_end: Some(sync::now(vk.device.clone()).boxed()),
+
+            previous_fence_i: 0,
+            fences,
+        }
+    }
+
+    pub fn if_recreate_swapchain(&mut self, vk: &mut VkImpl) {
+        let image_extent: [u32; 2] = vk.window.inner_size().into();
+        if image_extent.contains(&0) {
+            return;
+        }
+
+        self.previous_frame_end.as_mut().unwrap().cleanup_finished();
+
+        if self.recreate_swapchain {
+            let (new_swapchain, new_images) = vk.swapchain.clone().unwrap()
+            .recreate(SwapchainCreateInfo {
+                image_extent,
+                ..vk.swapchain.clone().unwrap().create_info()
+            })
+            .expect("failed to recreate swapchain");
+    
+            vk.swapchain = Some(new_swapchain);
+            let (new_pipeline, new_framebuffers) = VkImpl::window_size_dependent_setup(
+                vk,
+            );
+            vk.pipeline = Some(new_pipeline);
+            vk.framebuffers = new_framebuffers;
+
+            self.recreate_swapchain = false;
+        }
+    }
+
+    pub fn present(&mut self, vk: &VkImpl, command_buffer: Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>>) {
+        // TODO: make this function more based off of TEAPOT.rs in vulkano github
+        let (image_i, suboptimal, acquire_future) =
+            match swapchain::acquire_next_image(vk.swapchain.clone().unwrap(), None)
+                .map_err(Validated::unwrap)
+            {
+                Ok(r) => r,
+                Err(VulkanError::OutOfDate) => {
+                    self.recreate_swapchain = true;
+                    return;
+                }
+                Err(e) => panic!("failed to acquire next image: {e}"),
+            };
+
+        if suboptimal {
+            self.recreate_swapchain = true;
+        } 
+
+        if let Some(image_fence) = &self.fences[image_i as usize] {
+            image_fence.wait(None).unwrap();
+        }
+
+        let previous_future = match self.fences[self.previous_fence_i as usize].clone() {
+            None => {
+                let mut now = sync::now(vk.device.clone());
+                now.cleanup_finished();
+        
+                now.boxed()
+            }
+
+            Some(fence) => fence.boxed(),
+        };
+
+        let future = previous_future
+            .join(acquire_future)
+            .then_execute(vk.queue.clone(), command_buffer)
+            .unwrap()
+            .then_swapchain_present(
+                vk.queue.clone(),
+                SwapchainPresentInfo::swapchain_image_index(vk.swapchain.clone().unwrap(), image_i),
+            )
+            .then_signal_fence_and_flush();
+
+        self.fences[image_i as usize] = match future.map_err(Validated::unwrap) {
+            Ok(value) => Some(Arc::new(value)),
+            Err(VulkanError::OutOfDate) => {
+                self.recreate_swapchain = true;
+                None
+            }
+            Err(e) => {
+                println!("failed to flush future: {e}");
+                None
+            }
+        };
+
+        self.previous_fence_i = image_i;
+    }
+}
+
 pub struct VkImpl {
     pub window: Arc<winit::window::Window>,
     pub surface: Arc<Surface>,
@@ -63,9 +172,6 @@ pub struct VkImpl {
     pub allocators: Option<Arc<Allocators>>,
 
     pub renderer: Option<Arc<Mutex<Renderer>>>,
-
-    pub recreate_swapchain: bool,
-    pub previous_frame_end: Option<Box<(dyn GpuFuture + 'static)>>,
 }
 
 impl VkImpl {
@@ -152,10 +258,6 @@ impl VkImpl {
             allocators: None,
 
             renderer: None,
-
-            recreate_swapchain: false,
-            previous_frame_end: None,
-            
         }))
     } // new
 
@@ -165,9 +267,12 @@ impl VkImpl {
         self.allocators = Some(Arc::new(Allocators::new(self.device.clone())));
         self.renderer = Some(renderer);
 
-        VkImpl::window_size_dependent_setup(
+        let (mut pipeline, mut framebuffers) = VkImpl::window_size_dependent_setup(
             self,
         );
+
+        self.pipeline = Some(pipeline);
+        self.framebuffers = framebuffers;
     }
 
     fn create_swapchain(&mut self) {
@@ -356,35 +461,5 @@ impl VkImpl {
             indices,
         )
         .unwrap()
-    }
-
-    pub fn prepare_for_presentation(&mut self) {
-        
-    }
-
-    pub fn if_recreate_swapchain(&mut self) {
-        let image_extent: [u32; 2] = self.window.inner_size().into();
-        if image_extent.contains(&0) {
-            return;
-        }
-
-        self.previous_frame_end.as_mut().unwrap().cleanup_finished();
-
-        if self.recreate_swapchain {
-            let (new_swapchain, new_images) = self.swapchain.unwrap()
-            .recreate(SwapchainCreateInfo {
-                image_extent,
-                ..self.swapchain.unwrap().create_info()
-            })
-            .expect("failed to recreate swapchain");
-    
-            self.swapchain = Some(new_swapchain);
-            let (new_pipeline, new_framebuffers) = VkImpl::window_size_dependent_setup(
-                &mut self,
-            );
-            self.pipeline = Some(new_pipeline);
-            self.framebuffers = new_framebuffers;
-            self.recreate_swapchain = false;
-        }
     }
 }
