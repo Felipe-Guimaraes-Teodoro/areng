@@ -33,6 +33,7 @@ pub async fn run(event_loop: EventLoop<()>, renderer: Arc<Mutex<Renderer>>) {
                 event: WindowEvent::Resized(_),
                 ..
             } => {
+                //renderer.lock().unwrap().presenter.recreate_swapchain = true;
             },
 
             Event::WindowEvent {

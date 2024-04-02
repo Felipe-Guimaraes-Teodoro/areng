@@ -51,22 +51,14 @@ pub struct VkPresenter {
 
     pub previous_frame_end: Option<Box<(dyn GpuFuture + 'static)>>,
     pub frames_in_flight: usize,
-
-    previous_fence_i: u32,
-    fences: Vec<Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>>>>>,
 }
 
 impl VkPresenter {
     pub fn new(vk: &VkImpl) -> Self {
-        let mut fences: Vec<Option<Arc<FenceSignalFuture<_>>>> = vec![None; 1];
-
         Self {
             recreate_swapchain: false,
             frames_in_flight: vk.images.len(),
             previous_frame_end: Some(sync::now(vk.device.clone()).boxed()),
-
-            previous_fence_i: 0,
-            fences,
         }
     }
 
@@ -99,10 +91,8 @@ impl VkPresenter {
 
     pub fn present(&mut self, vk: &VkImpl, command_buffer: Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>>) {
         // TODO: make this function more based off of TEAPOT.rs in vulkano github
-        let (image_i, suboptimal, acquire_future) =
-            match swapchain::acquire_next_image(vk.swapchain.clone().unwrap(), None)
-                .map_err(Validated::unwrap)
-            {
+        let (image_index, suboptimal, acquire_future) =
+            match acquire_next_image(vk.swapchain.clone().unwrap(), None).map_err(Validated::unwrap) {
                 Ok(r) => r,
                 Err(VulkanError::OutOfDate) => {
                     self.recreate_swapchain = true;
@@ -113,46 +103,34 @@ impl VkPresenter {
 
         if suboptimal {
             self.recreate_swapchain = true;
-        } 
-
-        if let Some(image_fence) = &self.fences[image_i as usize] {
-            image_fence.wait(None).unwrap();
         }
 
-        let previous_future = match self.fences[self.previous_fence_i as usize].clone() {
-            None => {
-                let mut now = sync::now(vk.device.clone());
-                now.cleanup_finished();
-        
-                now.boxed()
-            }
-
-            Some(fence) => fence.boxed(),
-        };
-
-        let future = previous_future
+        let future = self.previous_frame_end
+            .take()
+            .unwrap()
             .join(acquire_future)
             .then_execute(vk.queue.clone(), command_buffer)
             .unwrap()
             .then_swapchain_present(
                 vk.queue.clone(),
-                SwapchainPresentInfo::swapchain_image_index(vk.swapchain.clone().unwrap(), image_i),
+                SwapchainPresentInfo::swapchain_image_index(vk.swapchain.clone().unwrap(), image_index),
             )
             .then_signal_fence_and_flush();
 
-        self.fences[image_i as usize] = match future.map_err(Validated::unwrap) {
-            Ok(value) => Some(Arc::new(value)),
+        match future.map_err(Validated::unwrap) {
+            Ok(future) => {
+                self.previous_frame_end = Some(future.boxed());
+            }
             Err(VulkanError::OutOfDate) => {
                 self.recreate_swapchain = true;
-                None
+                self.previous_frame_end = Some(sync::now(vk.device.clone()).boxed());
             }
             Err(e) => {
                 println!("failed to flush future: {e}");
-                None
+                self.previous_frame_end = Some(sync::now(vk.device.clone()).boxed());
             }
-        };
+        }
 
-        self.previous_fence_i = image_i;
     }
 }
 
